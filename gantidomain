@@ -1,0 +1,71 @@
+#!/bin/bash
+
+# Fungsi untuk mengganti domain di /etc/data/domain
+update_domain() {
+  # Menampilkan prompt dan input di baris yang sama
+  printf "Masukkan domain baru: "
+  read new_domain
+  echo $new_domain > /etc/data/domain
+}
+
+# Panggil fungsi untuk mengganti domain
+update_domain
+
+# Baca domain dari file /etc/data/domain
+domain=$(cat /etc/data/domain)
+userpanel=$(cat /etc/data/userpanel)
+passpanel=$(cat /etc/data/passpanel)
+
+# Baca port dari file /opt/marzban/.env
+port=$(grep 'UVICORN_PORT' /opt/marzban/.env | cut -d '=' -f2 | tr -d ' ')
+
+# Hapus direktori .acme.sh jika ada untuk memulai dari awal
+rm -rf ~/.acme.sh
+
+# Hentikan layanan Marzban
+marzban down
+
+# Periksa apakah Nginx sedang berjalan dan hentikan
+if pgrep nginx > /dev/null; then
+  echo "Menghentikan Nginx..."
+  pkill nginx
+  sleep 2
+  if pgrep nginx > /dev/null; then
+    echo "Gagal menghentikan Nginx."
+    exit 1
+  else
+    echo "Nginx berhasil dihentikan."
+  fi
+else
+  echo "Nginx tidak berjalan."
+fi
+
+# Unduh dan instal acme.sh
+curl https://get.acme.sh | sh -s email=email@gmail.com
+
+# Setel CA default ke Let's Encrypt
+/root/.acme.sh/acme.sh --set-default-ca --server letsencrypt
+
+# Daftarkan akun dengan server LetsEncrypt
+/root/.acme.sh/acme.sh --register-account -m email@gmail.com
+
+# Terbitkan sertifikat untuk domain dengan menggunakan standalone mode
+/root/.acme.sh/acme.sh --issue -d $domain --standalone -k ec-256
+
+# Buat direktori untuk menyimpan sertifikat jika belum ada
+mkdir -p /var/lib/marzban
+
+# Instal sertifikat yang diterbitkan ke lokasi yang sesuai
+/root/.acme.sh/acme.sh --install-cert -d $domain \
+--key-file       /var/lib/marzban/xray.key     \
+--fullchain-file /var/lib/marzban/xray.crt \
+
+# Memaksa pembaruan sertifikat
+/root/.acme.sh/acme.sh --renew -d $domain --force
+
+# Perbarui log-install.txt dengan domain baru
+sed -i "s|URL HTTPS.*|URL HTTPS : https://${domain}:${port}/dashboard|g" log-install.txt
+clear
+
+# Mulai ulang layanan Nginx setelah sertifikat terinstal
+nohup marzban restart &> /dev/null &

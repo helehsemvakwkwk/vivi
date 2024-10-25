@@ -1,0 +1,274 @@
+#!/bin/bash
+clear
+
+# Mendefinisikan warna untuk pesan
+export RED='\033[0;31m'
+export GREEN='\033[0;32m'
+export YELLOW='\033[0;33m'
+export BLUE='\033[0;34m'
+export PURPLE='\033[0;35m'
+export CYAN='\033[0;36m'
+export CYAN_BG='\033[46;1;97m'   # Latar belakang cyan cerah dengan teks putih
+export LIGHT='\033[0;37m'
+export PINK='\033[0;35m'
+export PINK_BG='\033[45;1;97m'   # Latar belakang pink cerah dengan teks putih
+export NC='\033[0m'
+
+# Path ke file database
+DB_PATH="/var/lib/marzban/db.sqlite3"
+
+# Menghitung pengguna aktif
+ACTIVE_USERS=$(sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM users WHERE status = 'active';")
+
+# Menghitung pengguna dinonaktifkan
+DISABLED_USERS=$(sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM users WHERE status = 'disabled';")
+
+# Menghitung pengguna kedaluwarsa
+EXPIRED_USERS=$(sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM users WHERE status = 'expired';")
+
+# Menghitung pengguna terbatas
+LIMITED_USERS=$(sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM users WHERE status = 'limited';")
+
+# Menghitung total akun
+TOTAL_USERS=$(sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM users;")
+
+# Fungsi untuk memeriksa IP dan mendapatkan client_name dan exp_date
+check_ip_and_get_info() {
+    local ip=$1
+    local line
+    while IFS= read -r line; do
+        if [[ $line == *"$ip"* ]]; then
+            client_name=$(echo "$line" | awk '{print $2}')
+            exp_date=$(echo "$line" | awk '{print $4}')
+            return 0
+        fi
+    done <<< "$permission_file"
+    return 1
+}
+
+# Mengambil data client dan expdate dari URL
+permission_file=$(curl -s https://raw.githubusercontent.com/helehsemvakwkwk/viavia/main/sholatbro.txt)
+
+# Mengambil informasi sistem
+OS=$(lsb_release -ds)
+RAM=$(free -m | awk '/Mem:/ { print $2 }')
+UPTIME=$(uptime -p)
+IP_VPS=$(hostname -I | awk '{print $1}')
+ISP=$(curl -s ipinfo.io/org)
+DOMAIN=$(cat /etc/data/domain)
+
+# Mengambil informasi IP lengkap dari ipinfo.io
+IP_INFO=$(curl -s "http://ipinfo.io/$IP_VPS/json")
+IP_REGION=$(echo "$IP_INFO" | jq -r '.region')
+IP_COUNTRY=$(echo "$IP_INFO" | jq -r '.country')
+IP_LOC=$(echo "$IP_INFO" | jq -r '.loc')
+
+# Periksa IP terlebih dahulu
+echo -e "${GREEN}Memeriksa IP...${NC}"
+sleep 1
+clear
+
+if check_ip_and_get_info "$IP_VPS"; then
+    :
+else
+    echo -e "${RED}IP not found in our database${NC}"
+    echo -e "Contact admin ${CYAN}@lunoxximpostor${NC}"
+    exit 1
+fi
+
+# Periksa apakah skrip sudah kedaluwarsa
+current_date=$(date +%Y-%m-%d)
+if [[ "$exp_date" != "Not Found" && $(date -d "$exp_date" +%Y-%m-%d) < $(date -d "$current_date" +%Y-%m-%d) ]]; then
+    echo -e "${GREEN}[ INFO ]${NC} ${RED}Script Expired !!!${NC}"
+    echo -e "Contact admin ${CYAN}@lunoxximpostor${NC}"
+    exit 1
+fi
+
+# Menghitung sisa hari
+if [[ "$exp_date" != "Not Found" ]]; then
+    days_remaining=$(( ($(date -d "$exp_date" +%s) - $(date -d "$current_date" +%s)) / 86400 ))
+    exp_message="$days_remaining ${YELLOW}days remaining${NC}"
+else
+    exp_message="Not Found"
+fi
+
+# // VAR
+if [[ $(netstat -ntlp | grep -i nginx | grep -i 0.0.0.0:443 | awk '{print $4}' | cut -d: -f2 | xargs | sed -e 's/ /, /g') == '443' ]]; then
+    NGINX="${CYAN}ON 🟢${NC}";
+else
+    NGINX="${RED}OFF 🔴${NC}";
+fi
+if [[ $(netstat -ntlp | grep -i python | grep -E '0.0.0.0:(7879|6969|8080)' | awk '{print $4}' | cut -d: -f2 | xargs | sed -e 's/ /, /g') =~ (7879|6969|8080) ]]; then
+    MARZ="${CYAN}ON 🟢${NC}";
+else
+    MARZ="${RED}OFF 🔴${NC}";
+fi
+if [[ $(systemctl status ufw | grep -w Active | awk '{print $2}' | sed 's/(//g' | sed 's/)//g' | sed 's/ //g') == 'active' ]]; then
+    UFW="${CYAN}ON 🟢${NC}";
+else
+    UFW="${RED}OFF 🔴${NC}";
+fi
+
+# Fungsi del exp user
+delete_expired_users() {
+    # Hapus pengguna yang sudah expired dari database
+    sqlite3 "$DB_PATH" "DELETE FROM users WHERE status = 'expired';"
+    echo -e "${CYAN}[SUCCESS]${NC} Semua pengguna yang expired telah dihapus."
+    echo -e "Silahkan kembali ke ${CYAN}[Menu]${NC} untuk melihat statusnya"
+}
+
+# Fungsi untuk mencetak teks dengan warna gradien menggunakan lolcat dan font yang lebih kecil
+print_gradient_text() {
+  local text="$1"
+  if command -v lolcat &> /dev/null; then
+    echo "$text" | figlet -f standard | lolcat
+  else
+    echo "$text" | figlet -f standard
+  fi
+}
+
+# Teks yang ingin ditampilkan
+text="MarZbnXIGH"
+
+PINK='\033[35m'
+CYAN='\033[36m'
+WHITE='\033[37m'
+NC='\033[0m'
+
+# Fungsi untuk menampilkan menu pilihan
+show_menu() {
+    clear
+    print_gradient_text "$text"
+    #echo -e "    ❖ Jangan Berharap Banyak Pada Negara ! ❖" | lolcat
+    echo -e "        ❖ Mulyonooooooo Badjingannnnnnnn!!!!!! ❖" | lolcat
+    echo -e "${CYAN} ╭═══════════════════════════════════════════════════╮${NC}"
+    echo -e " ${CYAN}│${NC}${CYAN_BG}             ❖ Marzban x IGH Project ❖             ${NC}${CYAN}│${NC}"
+    echo -e "${CYAN} ╰═══════════════════════════════════════════════════╯${NC}"
+    echo -e "${CYAN} ╭═════════════ ● ${WHITE}Service Information${NC} ${CYAN}● ═════════════╮${NC}"
+    echo -e " ${CYAN}│${NC} ${NC}Nginx${NC}: ${NGINX} ${CYAN}│${NC} ${NC}Firewall${NC} : ${UFW} ${CYAN}│${NC} ${NC}Marzban${NC} : ${MARZ} ${CYAN}│${NC}"
+    echo -e "${CYAN} ╰═══════════════════════════════════════════════════╯${NC}"
+    echo -e "   ${CYAN}● ───────────────────────────────────────────── ●${NC}"
+    echo -e "${CYAN} ╭════════════ ╭∩╮ ${WHITE}Users Information ${CYAN}╭∩╮ ════════════╮${NC}"
+    printf " ${CYAN}│\033[0m${NC} ✅ ${CYAN}Active${NC} : %-3d ${CYAN}Users${NC}   ${CYAN}│${NC} ❌ ${CYAN}Disabled${NC} : %-3d ${CYAN}Users${NC} ${CYAN}│\033[0m${NC}\n" "$ACTIVE_USERS" "$DISABLED_USERS"
+    printf " ${CYAN}│\033[0m${NC} 🤬 ${CYAN}Exp${NC} : %-3d    ${CYAN}Users${NC}   ${CYAN}│${NC} 🦄 ${CYAN}Limited${NC} : %-3d  ${CYAN}Users${NC} ${CYAN}│\033[0m${NC}\n" "$EXPIRED_USERS" "$LIMITED_USERS"
+    printf " ${CYAN}│\033[0m${NC}              🐋 ${CYAN}Total${NC} : %-3d ${CYAN}Users${NC} ${CYAN}                ${CYAN}│\033[0m${NC}\n" "$TOTAL_USERS"
+    printf "${CYAN} ╰═══════════════════════════════════════════════════╯${NC}\n"
+    echo -e "   ${CYAN}● ───────────────────────────────────────────── ●${NC}"
+    echo -e "     ${NC}╭∩╮ Please enter your choice to activated ╭∩╮${NC}"
+    echo -e "${CYAN} ╭═══════════════════════════════════════════════════╮${NC}" #${NC}[${NC}${CYAN}Menu${NC}${NC}]${NC} #${CYAN}●${NC}
+    echo -e " ${CYAN}│\033[0m${NC} [${CYAN}01${NC}] ${CYAN}●${NC} ${NC}Add Token ${NC}[${NC}${CYAN}Menu${NC}${NC}]${NC} ${CYAN}│${NC} [${CYAN}12${NC}] ${CYAN}●${NC} ${NC}Speedtest ${NC}[${NC}${CYAN}Menu${NC}${NC}]${NC} ${CYAN}│${NC}"
+    echo -e " ${CYAN}│\033[0m${NC} [${CYAN}02${NC}] ${CYAN}●${NC} ${NC}Routing   ${NC}[${NC}${CYAN}Menu${NC}${NC}]${NC} ${CYAN}│${NC} [${CYAN}13${NC}] ${CYAN}●${NC} ${NC}Update SC ${NC}[${NC}${CYAN}Menu${NC}${NC}]${NC} ${CYAN}│${NC}"
+    echo -e " ${CYAN}│\033[0m${NC} [${CYAN}03${NC}] ${CYAN}●${NC} ${NC}Seeroute  ${NC}[${NC}${CYAN}Menu${NC}${NC}]${NC} ${CYAN}│${NC} [${CYAN}14${NC}] ${CYAN}●${NC} ${NC}Limit IP  ${NC}[${NC}${CYAN}Menu${NC}${NC}]${NC} ${CYAN}│${NC}"
+    echo -e " ${CYAN}│\033[0m${NC} [${CYAN}04${NC}] ${CYAN}●${NC} ${NC}Backup    ${NC}[${NC}${CYAN}Menu${NC}${NC}]${NC} ${CYAN}│${NC} [${CYAN}15${NC}] ${CYAN}●${NC} ${NC}Add Admin ${NC}[${NC}${CYAN}Menu${NC}${NC}]${NC} ${CYAN}│${NC}"
+    echo -e " ${CYAN}│\033[0m${NC} [${CYAN}05${NC}] ${CYAN}●${NC} ${NC}Restore   ${NC}[${NC}${CYAN}Menu${NC}${NC}]${NC} ${CYAN}│${NC} [${CYAN}16${NC}] ${CYAN}●${NC} ${NC}Del Admin ${NC}[${NC}${CYAN}Menu${NC}${NC}]${NC} ${CYAN}│${NC}"
+    echo -e " ${CYAN}│\033[0m${NC} [${CYAN}06${NC}] ${CYAN}●${NC} ${NC}Domain    ${NC}[${NC}${CYAN}Menu${NC}${NC}]${NC} ${CYAN}│${NC} [${CYAN}17${NC}] ${CYAN}●${NC} ${NC}Cek Admin ${NC}[${NC}${CYAN}Menu${NC}${NC}]${NC} ${CYAN}│${NC}"
+    echo -e " ${CYAN}│\033[0m${NC} [${CYAN}07${NC}] ${CYAN}●${NC} ${NC}Template  ${NC}[${NC}${CYAN}Menu${NC}${NC}]${NC} ${CYAN}│${NC} [${CYAN}18${NC}] ${CYAN}●${NC} ${NC}Cek User  ${NC}[${NC}${CYAN}Menu${NC}${NC}]${NC} ${CYAN}│${NC}"
+    echo -e " ${CYAN}│\033[0m${NC} [${CYAN}08${NC}] ${CYAN}●${NC} ${NC}Bot Tele  ${NC}[${NC}${CYAN}Menu${NC}${NC}]${NC} ${CYAN}│${NC} [${CYAN}19${NC}] ${CYAN}●${NC} ${NC}Del EXP   ${NC}[${NC}${CYAN}Menu${NC}${NC}]${NC} ${CYAN}│${NC}"
+    echo -e " ${CYAN}│\033[0m${NC} [${CYAN}09${NC}] ${CYAN}●${NC} ${NC}Bot Usage ${NC}[${NC}${CYAN}Menu${NC}${NC}]${NC} ${CYAN}│${NC} [${CYAN}20${NC}] ${CYAN}●${NC} ${NC}Rebuild   ${NC}[${NC}${CYAN}Menu${NC}${NC}]${NC} ${CYAN}│${NC}"
+    echo -e " ${CYAN}│\033[0m${NC} [${CYAN}10${NC}] ${CYAN}●${NC} ${NC}Bot Trfic ${NC}[${NC}${CYAN}Menu${NC}${NC}]${NC} ${CYAN}│${NC} [${CYAN}21${NC}] ${CYAN}●${NC} ${NC}WARP      ${NC}[${NC}${CYAN}Menu${NC}${NC}]${NC} ${CYAN}│${NC}"
+    echo -e " ${CYAN}│\033[0m${NC} [${CYAN}11${NC}] ${CYAN}●${NC} ${NC}Benchmark ${NC}[${NC}${CYAN}Menu${NC}${NC}]${NC} ${CYAN}│${NC} [${CYAN}22${NC}] ${CYAN}●${NC} ${NC}Xray Core ${NC}[${NC}${CYAN}Menu${NC}${NC}]${NC} ${CYAN}│${NC}"
+    echo -e "${CYAN} ╰═══════════════════════════════════════════════════╯${NC}"
+    echo -e "   ${CYAN}● ───────────────────────────────────────────── ●${NC}"
+    echo -e "${NC}You can type [${NC} ${CYAN}x${NC} ${NC}] to return to the main menu${NC}"
+}
+
+# Mengembalikan prompt terminal ke bentuk asli
+PS1='root@localhost: '
+
+# Menampilkan menu utama saat pertama kali menjalankan skrip
+show_menu
+
+# Memungkinkan pengguna menjalankan perintah lain dan kembali ke menu dengan mengetik 'menu'
+    read -rp "❖ Your Choice : " input
+echo -e ""
+        case $input in
+            1)
+                echo -e "${YELLOW}Add Token selected${NC}"
+                addtoken
+                ;;
+            2)
+                echo -e "${YELLOW}Routing Menu selected${NC}"
+                routing
+                ;;
+            3)
+                echo -e "${YELLOW}Seeroute Menu selected${NC}"
+                seeroute
+                ;;
+            4)
+                echo -e "${YELLOW}Backup Data selected${NC}"
+                backup
+                ;;
+            5)
+                echo -e "${YELLOW}Restore Data selected${NC}"
+                restore
+                ;;
+            6)
+                echo -e "${YELLOW}Ganti Domain selected${NC}"
+                gantidomain
+                ;;
+            7)
+                echo -e "${YELLOW}Template Menu selected${NC}"
+                python3 /usr/local/bin/main.py
+                ;;
+            8)
+                echo -e "${YELLOW}Bot Menu selected${NC}"
+                jembot.sh
+                ;;
+            9)
+                echo -e "${YELLOW}Bot Usage selected${NC}"
+                python3 /usr/local/bin/usage.py
+                ;;
+            10)
+                echo -e "${YELLOW}Traffict Monitor Bot selected${NC}"
+                bwbot
+                ;;
+            11)
+                echo -e "${YELLOW}Benchmark server selected${NC}"
+                ngecrot
+                ;;
+            12)
+                echo -e "${YELLOW}Speedtest Menu selected${NC}"
+                speedtest
+                ;;
+            13)
+                echo -e "${YELLOW}Update Script selected${NC}"
+                updatesc
+                ;;
+            14)
+                echo -e "${YELLOW}Limit IP Menu selected${NC}"
+                limit
+                ;;
+            15)
+                echo -e "${YELLOW}Add Admin selected${NC}"
+                marzban cli admin create
+                ;;
+            16)
+                echo -e "${YELLOW}Del Admin selected${NC}"
+                marzban cli admin delete
+                ;;
+            17)
+                echo -e "${YELLOW}Ceklist Admin selected${NC}"
+                marzban cli admin list
+                ;;
+            18)
+                echo -e "${YELLOW}Cek BW All user selected${NC}"
+                marzban cli user list
+                ;;
+            19)
+                echo -e "${YELLOW}Del EXP User selected${NC}"
+                delete_expired_users
+                ;;
+            20)
+                echo -e "${YELLOW}Ez Rebuild VPS selected${NC}"
+                madngentot
+                ;;
+            21)
+                echo -e "${YELLOW}WARP Menu selected${NC}"
+                warpmenu
+                ;;
+            22)
+                echo -e "${YELLOW}Xray Core Menu selected${NC}"
+                apdetcore
+                ;;
+        esac
+    

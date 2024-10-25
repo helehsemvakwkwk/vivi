@@ -1,0 +1,273 @@
+#!/bin/bash
+
+function install_limit_ip() {
+  # Memeriksa apakah baris 1-6 sudah sesuai sebelum menggantinya
+  if ! grep -q '"loglevel": "info"' /var/lib/marzban/xray_config.json; then
+    # Mereplace baris 1-6 pada file xray_config.json hanya jika belum sesuai
+    sed -i '1,6c\
+{\
+  "log": {\
+    "loglevel": "info"\
+  },' /var/lib/marzban/xray_config.json
+  else
+    echo "Konfigurasi loglevel sudah ada, melewati penggantian."
+  fi
+
+  #restart marzban
+  cd /opt/marzban
+  docker compose down && docker compose up -d
+  clear
+  sleep 2
+  
+  # Define colors
+  YELLOW='\033[1;33m'
+  RED='\033[1;31m'
+  CYAN='\033[1;32m'
+  BLUE='\033[1;34m'
+  CYAN='\033[0;36m'
+  WHITE='\033[1;37m'
+  NC='\033[0m' # No Color
+
+  # Update dan install dependencies
+  apt update
+  apt install python3 -y
+  apt install pip -y
+
+  # Install libraries Python
+  pip install websockets
+  pip install pytz
+  clear
+  sleep 2
+  
+  # Buat direktori jika belum ada
+  mkdir -p /usr/local/bin/V2IpLimit
+
+  # Mengunduh file Python dan konfigurasi jika belum ada
+  if [ ! -f /usr/local/bin/V2IpLimit/v2_ip_limit.py ]; then
+    wget -O /usr/local/bin/V2IpLimit/v2_ip_limit.py https://raw.githubusercontent.com/helehsemvakwkwk/vivi/main/v2_ip_limit.py
+  fi
+    clear
+    sleep 2
+
+  if [ ! -f /usr/local/bin/V2IpLimit/v2iplimit_config.json ] || ! grep -q "LIMIT_NUMBER" /usr/local/bin/V2IpLimit/v2iplimit_config.json; then
+    read -p "$(echo -e "${WHITE}Mau Dikasih ${CYAN}Limit IP${WHITE} Berapa? : ${NC}")" LIMIT_NUMBER
+    read -p "$(echo -e "${WHITE}Masukkan ${CYAN}Telegram Bot${WHITE} Token : ${NC}")" BOT_TOKEN
+    read -p "$(echo -e "${WHITE}Masukkan ${CYAN}Chat ID${WHITE} Kamu : ${NC}")" CHAT_ID
+    read -p "$(echo -e "${WHITE}Masukkan ${CYAN}Username Panel${WHITE} Kamu : ${NC}")" PANEL_USERNAME
+    read -p "$(echo -e "${WHITE}Masukkan ${CYAN}Password Panel${WHITE} Kamu : ${NC}")" PANEL_PASSWORD
+    read -p "$(echo -e "${WHITE}Masukkan Panel Domain ${CYAN}ex : sub.domain.com:6969${WHITE} : ${NC}")" PANEL_DOMAIN
+    read -p "$(echo -e "${WHITE}Mau Cek Tiap Berapa Menit? ${CYAN}isi saja 4${WHITE} untuk 4 menit : ${NC}")" TIME_TO_CHECK
+    read -p "$(echo -e "${WHITE}Mau Lock Berapa Menit? ${CYAN}isi saja 5${WHITE} untuk 5 menit : ${NC}")" INACTIVE_DURATION
+
+    # Unduh file template konfigurasi JSON jika belum ada
+    wget -O /usr/local/bin/V2IpLimit/v2iplimit_config.json https://raw.githubusercontent.com/helehsemvakwkwk/vivi/main/v2iplimit_config.json
+
+    # Mengganti variabel dalam v2iplimit_config.json
+    sed -i "s/\"LIMIT_NUMBER\":.*/\"LIMIT_NUMBER\": $LIMIT_NUMBER,/" /usr/local/bin/V2IpLimit/v2iplimit_config.json
+    sed -i "s|\[add_your_bot_token_here\]|$BOT_TOKEN|g" /usr/local/bin/V2IpLimit/v2iplimit_config.json
+    sed -i "s/\"CHAT_ID\":.*/\"CHAT_ID\": $CHAT_ID,/" /usr/local/bin/V2IpLimit/v2iplimit_config.json
+    sed -i "s/\"PANEL_USERNAME\":.*/\"PANEL_USERNAME\": \"$PANEL_USERNAME\",/" /usr/local/bin/V2IpLimit/v2iplimit_config.json
+    sed -i "s/\"PANEL_PASSWORD\":.*/\"PANEL_PASSWORD\": \"$PANEL_PASSWORD\",/" /usr/local/bin/V2IpLimit/v2iplimit_config.json
+    sed -i "s/\"PANEL_DOMAIN\":.*/\"PANEL_DOMAIN\": \"$PANEL_DOMAIN\",/" /usr/local/bin/V2IpLimit/v2iplimit_config.json
+    sed -i "s/\"TIME_TO_CHECK\":.*/\"TIME_TO_CHECK\": $TIME_TO_CHECK,/" /usr/local/bin/V2IpLimit/v2iplimit_config.json
+    sed -i "s/\"INACTIVE_DURATION\":.*/\"INACTIVE_DURATION\": $INACTIVE_DURATION,/" /usr/local/bin/V2IpLimit/v2iplimit_config.json
+  else
+    echo "Konfigurasi sudah ada, melewati langkah input user."
+  fi
+
+  # Membuat file service systemd untuk menjalankan script secara otomatis
+  SERVICE_FILE=/etc/systemd/system/v2iplimit.service
+
+  echo "[Unit]
+  Description=V2 IP Limit Script
+
+  [Service]
+  ExecStart=/usr/bin/python3 /usr/local/bin/V2IpLimit/v2_ip_limit.py
+  WorkingDirectory=/usr/local/bin/V2IpLimit/
+  Restart=always
+  User=root
+
+  [Install]
+  WantedBy=multi-user.target" > $SERVICE_FILE
+
+  # Reload systemd untuk mengenali service baru
+  systemctl daemon-reload
+
+  # Enable service agar otomatis berjalan saat boot
+  systemctl enable v2iplimit.service
+
+  # Start service untuk menjalankan script sekarang juga
+  systemctl start v2iplimit.service
+
+  echo "Instalasi selesai. Script v2_ip_limit.py telah diatur untuk berjalan otomatis di background."
+}
+
+function enable_limit_ip() {
+  systemctl enable v2iplimit.service
+  systemctl start v2iplimit.service
+  echo -e "${CYAN}Service V2 IP Limit telah diaktifkan.${NC}"
+}
+
+function disable_limit_ip() {
+  systemctl stop v2iplimit.service
+  systemctl disable v2iplimit.service
+  echo -e "${CYAN}Service V2 IP Limit telah dihentikan dan dinonaktifkan.${NC}"
+}
+
+function cekstatus_limit_ip() {
+  systemctl status v2iplimit.service
+  echo -e "${CYAN}Cek Status Limit IP.${NC}"
+}
+
+function edit_configuration() {
+  echo -e "${CYAN}Mengedit konfigurasi V2 IP Limit...${NC}"
+  
+  # Mematikan layanan terlebih dahulu
+  disable_limit_ip
+  
+  # Input user untuk mengedit konfigurasi
+    read -p "$(echo -e "${WHITE}Mau Dikasih ${CYAN}Limit IP${WHITE} Berapa? : ${NC}")" LIMIT_NUMBER
+    read -p "$(echo -e "${WHITE}Masukkan ${CYAN}Telegram Bot${WHITE} Token : ${NC}")" BOT_TOKEN
+    read -p "$(echo -e "${WHITE}Masukkan ${CYAN}Chat ID${WHITE} Kamu : ${NC}")" CHAT_ID
+    read -p "$(echo -e "${WHITE}Masukkan ${CYAN}Username Panel${WHITE} Kamu : ${NC}")" PANEL_USERNAME
+    read -p "$(echo -e "${WHITE}Masukkan ${CYAN}Password Panel${WHITE} Kamu : ${NC}")" PANEL_PASSWORD
+    read -p "$(echo -e "${WHITE}Masukkan Panel Domain ${CYAN}ex : sub.domain.com:6969${WHITE} : ${NC}")" PANEL_DOMAIN
+    read -p "$(echo -e "${WHITE}Mau Cek Tiap Berapa Menit? ${CYAN}isi saja 4${WHITE} untuk 4 menit : ${NC}")" TIME_TO_CHECK
+    read -p "$(echo -e "${WHITE}Mau Lock Berapa Menit? ${CYAN}isi saja 5${WHITE} untuk 5 menit : ${NC}")" INACTIVE_DURATION
+
+    # Unduh file template konfigurasi JSON jika belum ada
+    wget -O /usr/local/bin/V2IpLimit/v2iplimit_config.json https://raw.githubusercontent.com/helehsemvakwkwk/vivi/main/v2iplimit_config.json
+    
+    # Mengganti variabel dalam v2iplimit_config.json
+    sed -i "s/\"LIMIT_NUMBER\":.*/\"LIMIT_NUMBER\": $LIMIT_NUMBER,/" /usr/local/bin/V2IpLimit/v2iplimit_config.json
+    sed -i "s|\[add_your_bot_token_here\]|$BOT_TOKEN|g" /usr/local/bin/V2IpLimit/v2iplimit_config.json
+    sed -i "s/\"CHAT_ID\":.*/\"CHAT_ID\": $CHAT_ID,/" /usr/local/bin/V2IpLimit/v2iplimit_config.json
+    sed -i "s/\"PANEL_USERNAME\":.*/\"PANEL_USERNAME\": \"$PANEL_USERNAME\",/" /usr/local/bin/V2IpLimit/v2iplimit_config.json
+    sed -i "s/\"PANEL_PASSWORD\":.*/\"PANEL_PASSWORD\": \"$PANEL_PASSWORD\",/" /usr/local/bin/V2IpLimit/v2iplimit_config.json
+    sed -i "s/\"PANEL_DOMAIN\":.*/\"PANEL_DOMAIN\": \"$PANEL_DOMAIN\",/" /usr/local/bin/V2IpLimit/v2iplimit_config.json
+    sed -i "s/\"TIME_TO_CHECK\":.*/\"TIME_TO_CHECK\": $TIME_TO_CHECK,/" /usr/local/bin/V2IpLimit/v2iplimit_config.json
+    sed -i "s/\"INACTIVE_DURATION\":.*/\"INACTIVE_DURATION\": $INACTIVE_DURATION,/" /usr/local/bin/V2IpLimit/v2iplimit_config.json
+
+  # Menjalankan kembali layanan setelah konfigurasi disimpan
+  enable_limit_ip
+}
+
+function edit_except_users() {
+  local CONFIG_FILE="/usr/local/bin/V2IpLimit/v2iplimit_config.json"
+  disable_limit_ip
+
+  clear
+  echo "Pilih opsi untuk mengedit except users:"
+  echo "1. Tambah user"
+  echo "2. Hapus user"
+  echo "3. Cek daftar user yang dikecualikan"
+  read -p "Pilih opsi (1/2/3): " option
+
+  if [[ $option == "1" ]]; then
+    read -p $'Masukkan \e[36musername\e[0m yang ingin ditambahkan !\nPisahkan dengan koma jika lebih dari satu\n\e[32mEx : username1,username2: \e[0m' new_users
+    IFS=',' read -ra users_array <<< "$new_users"
+    for user in "${users_array[@]}"; do
+      jq ".EXCEPT_USERS += [\"$user\"]" $CONFIG_FILE > tmp.json && mv tmp.json $CONFIG_FILE
+    done
+    echo "User-user telah ditambahkan ke EXCEPT_USERS."
+  elif [[ $option == "2" ]]; then
+    read -p "Masukkan username yang ingin dihapus (pisahkan dengan koma jika lebih dari satu): " del_users
+    IFS=',' read -ra users_array <<< "$del_users"
+    for user in "${users_array[@]}"; do
+      jq "del(.EXCEPT_USERS[] | select(. == \"$user\"))" $CONFIG_FILE > tmp.json && mv tmp.json $CONFIG_FILE
+    done
+    echo "User-user telah dihapus dari EXCEPT_USERS."
+  elif [[ $option == "3" ]]; then
+    echo "Daftar user yang dikecualikan:"
+    jq -r '.EXCEPT_USERS[]' $CONFIG_FILE
+  else
+    echo "Pilihan tidak valid."
+  fi
+
+  enable_limit_ip
+}
+
+function update_special_limit() {
+  local CONFIG_FILE="/usr/local/bin/V2IpLimit/v2iplimit_config.json"
+  disable_limit_ip
+
+  clear
+  echo "Pilih opsi untuk Special Limit:"
+  echo "1. Tambah user"
+  echo "2. Hapus user"
+  echo "3. Cek daftar user di SPECIAL_LIMIT"
+  read -p "Pilih opsi (1/2/3): " option
+
+  if [[ $option == "1" ]]; then
+    read -p "Masukkan username yang ingin ditambahkan: " username
+    read -p "Masukkan limit untuk $username: " limit
+    jq ".SPECIAL_LIMIT += [[\"$username\", $limit]]" $CONFIG_FILE > tmp.json && mv tmp.json $CONFIG_FILE
+    echo "User $username dengan limit $limit telah ditambahkan ke Special Limit."
+  elif [[ $option == "2" ]]; then
+    read -p "Masukkan username yang ingin dihapus dari Special Limit: " username
+    jq "del(.SPECIAL_LIMIT[] | select(.[0] == \"$username\"))" $CONFIG_FILE > tmp.json && mv tmp.json $CONFIG_FILE
+    echo "User $username telah dihapus dari Special Limit."
+  elif [[ $option == "3" ]]; then
+    echo "Daftar user dalam Special Limit:"
+    jq -r '.SPECIAL_LIMIT[] | .[0]' $CONFIG_FILE | while read -r user; do
+        limit=$(jq -r ".SPECIAL_LIMIT[] | select(.[0] == \"$user\") | .[1]" $CONFIG_FILE)
+        echo "Username: $user, Limit: $limit"
+    done
+  else
+    echo "Pilihan tidak valid."
+  fi
+
+  enable_limit_ip
+}
+
+function remove_v2_ip_limit() {
+  local DIRECTORY="/usr/local/bin/V2IpLimit"
+  disable_limit_ip
+  
+  if [ -d "$DIRECTORY" ]; then
+    echo -e "${RED}Menghapus folder V2IpLimit...${NC}"
+    rm -rf "$DIRECTORY"
+    echo -e "${CYAN}Folder V2IpLimit telah dihapus.${NC}"
+  else
+    echo -e "${RED}Folder V2IpLimit tidak ditemukan.${NC}"
+  fi
+}
+
+function show_menu() {
+  sleep 2
+  clear
+  echo -e "${YELLOW}###########################################${NC}"
+  echo -e "${YELLOW}#####${CYAN}   Marzban Limit IP Menu v.6.9   ${YELLOW}#####${NC}"
+  echo -e "${YELLOW}#####${NC}       by MrZbNxIGH Project      ${YELLOW}#####${NC}"
+  echo -e "${YELLOW}###########################################${NC}"
+  echo -e "\n[ ${GREEN}WAJIB${NC} ] Install Terlebih Dahulu !"
+  echo -e "Seterusnya tinggal ${CYAN}eksekusi${NC} saja\n"
+  echo -e "${CYAN}Pilih opsi dibawah :${NC}"
+  echo -e "[ ${CYAN}1${NC} ] Install Limit IP"
+  echo -e "[ ${CYAN}2${NC} ] Enable Limit IP"
+  echo -e "[ ${CYAN}3${NC} ] Disable Limit IP"
+  echo -e "[ ${CYAN}4${NC} ] Except Users"
+  echo -e "[ ${CYAN}5${NC} ] Special Limit"
+  echo -e "[ ${CYAN}6${NC} ] Edit Configuration"
+  echo -e "[ ${CYAN}7${NC} ] Cek Status"
+  echo -e "[ ${CYAN}8${NC} ] Uninstall Limit IP"
+  echo -e "[ ${CYAN}x${NC} ] Exit"
+  echo ""
+}
+
+while true; do
+  show_menu
+  read -p "Pilih opsi: " choice
+  case $choice in
+    1) install_limit_ip ;;
+    2) enable_limit_ip ;;
+    3) disable_limit_ip ;;
+    4) edit_except_users ;;
+    5) update_special_limit ;;
+    6) edit_configuration ;;
+    7) cekstatus_limit_ip ;;
+    8) remove_v2_ip_limit ;;
+    x) exit ;;
+    *) echo "Pilihan tidak valid." ;;
+  esac
+done

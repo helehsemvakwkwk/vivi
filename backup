@@ -1,0 +1,87 @@
+#!/bin/bash
+
+# Path ke file konfigurasi
+config_file="/root/backup_config.conf"
+
+# ANSI escape code for cyan text
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# Fungsi untuk meminta input dari pengguna
+get_input() {
+    read -p "$(echo -e "${CYAN}Masukkan API BOT Telegram: ${NC}")" bot_api
+    read -p "$(echo -e "${CYAN}Masukkan CHAT ID Telegram: ${NC}")" chat_id
+
+    # Simpan nilai-nilai ini ke dalam file konfigurasi
+    echo "BOT_API=$bot_api" > $config_file
+    echo "CHAT_ID=$chat_id" >> $config_file
+
+    # Tanyakan apakah ingin mengaktifkan crontab setiap 00:05
+    read -p "$(echo -e "${CYAN}Aktifkan crontab tiap 00:05? (y/N): ${NC}")" enable_crontab
+
+    if [[ "$enable_crontab" == "y" || "$enable_crontab" == "Y" ]]; then
+        # Tambahkan tugas crontab
+        (crontab -l 2>/dev/null; echo "5 0 * * * /usr/local/bin/backup") | crontab -
+        echo -e "${CYAN}Crontab telah diaktifkan untuk menjalankan backup setiap 00:05.${NC}"
+    else
+        echo -e "${CYAN}Crontab tidak diaktifkan.${NC}"
+    fi
+}
+
+# Cek apakah file konfigurasi sudah ada
+if [ ! -f $config_file ]; then
+    get_input
+fi
+
+# Baca nilai-nilai dari file konfigurasi
+source $config_file
+
+# Path ke direktori yang berisi file
+directory="/var/lib/marzban/"
+
+# Hapus file access.log
+rm -f "${directory}access.log" > /dev/null 2>&1
+
+# Hapus file error.log
+rm -f "${directory}error.log" > /dev/null 2>&1
+
+# Path ke file db.sqlite3
+db_file="/var/lib/marzban/db.sqlite3"
+
+# Path untuk menyimpan file backup
+backup_dir="/root/"
+
+# Menyimpan informasi alamat IP publik
+IP_ADDRESS=$(curl -s ifconfig.me)
+
+# Nama file backup
+backup_file="${IP_ADDRESS}-backupdata.zip"
+
+# Membersihkan backup sebelumnya, jika ada
+rm -f "${backup_dir}${backup_file}" > /dev/null 2>&1
+
+# Membuat backup dari file db.sqlite3
+zip -j "${backup_dir}${backup_file}" "$db_file" > /dev/null 2>&1
+
+# Menyimpan informasi waktu backup (hanya tanggal dan waktu)
+BACKUP_DATE=$(date +"%Y-%m-%d %I:%M:%S %p")
+
+# Menyimpan informasi nama client (Hostname dari VPS)
+CLIENT_NAME=$(hostname)
+
+# Membaca keterangan domain dari file /etc/data/domain
+if [ -f /etc/data/domain ]; then
+    DOMAIN=$(cat /etc/data/domain)
+else
+    DOMAIN="Domain tidak ditemukan"
+fi
+
+# Mengirim file backup ke bot Telegram
+curl -s -F chat_id="$CHAT_ID" \
+     -F caption=$'=================================\n『 successfully backup your database 』\n=================================\n◈ Client  : <code>'"$CLIENT_NAME</code>"$'\n◈ IP VPS  : <code>'"$IP_ADDRESS</code>"$'\n◈ Version  : 2.1 Stable\n◈ Built By  : @SaputraTech\n=================================\n➣ Cara Restore ?\n➣ Use SFTP\n➣ Replace file db.sqlite3\n=================================' \
+     -F parse_mode="HTML" \
+     -F document=@"${backup_dir}${backup_file}" \
+     https://api.telegram.org/bot$BOT_API/sendDocument > /dev/null 2>&1
+
+# Menampilkan pesan bahwa backup telah berhasil dengan warna hijau
+echo -e "\033[0;32mMengrim File Backup Data Ke BOT Telegram Kamu Berhasil 💙\033[0m"
