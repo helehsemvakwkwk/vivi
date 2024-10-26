@@ -1,0 +1,137 @@
+#!/bin/bash
+
+# Warna untuk output
+PINK='\033[0;35m'
+CYAN='\033[0;36m'
+RED='\033[0;31m'
+YELLOW='\033[0;33m'
+GREEN='\033[0;32m'
+NC='\033[0m' # No Color
+
+# Fungsi untuk memeriksa dan memperbarui file jika diperlukan
+update_file() {
+    local url=$1
+    local target_path=$2
+    local file_name=$(basename "$target_path")
+
+    echo -e "${GREEN}Mengunduh $file_name...${NC}"
+    sleep 2
+
+    # Unduh file baru ke lokasi sementara
+    temp_file=$(mktemp)
+    curl -s -o "$temp_file" "$url"
+
+    # Hitung hash dari file yang ada dan yang baru
+    if [[ -f "$target_path" ]]; then
+        current_hash=$(sha256sum "$target_path" | awk '{ print $1 }')
+    else
+        current_hash=""
+    fi
+    new_hash=$(sha256sum "$temp_file" | awk '{ print $1 }')
+
+    # Periksa apakah hash berbeda
+    if [[ "$current_hash" == "$new_hash" ]]; then
+        echo -e "${YELLOW}$file_name sudah terbaru.${NC}"
+        rm "$temp_file"
+    else
+        mv "$temp_file" "$target_path"
+        # Mengatur hak akses yang sesuai
+        if [[ "$target_path" == "/var/www/html/index.html" ]]; then
+            chmod 755 "$target_path"
+        else
+            chmod +x "$target_path"
+        fi
+        echo -e "${CYAN}$file_name telah diperbarui.${NC}"
+    fi
+}
+
+# Update SC
+update_file "https://raw.githubusercontent.com/helehsemvakwkwk/vivi/main/updatesc" "/usr/local/bin/updatesc"
+
+# Update MENU
+update_file "https://raw.githubusercontent.com/helehsemvakwkwk/vivi/main/menu" "/usr/local/bin/menu"
+
+# Update Add Token
+update_file "https://raw.githubusercontent.com/helehsemvakwkwk/vivi/main/addtoken" "/usr/local/bin/addtoken"
+
+# Update Routing
+update_file "https://raw.githubusercontent.com/helehsemvakwkwk/vivi/main/routing" "/usr/local/bin/routing"
+
+# Update seeroute
+update_file "https://raw.githubusercontent.com/helehsemvakwkwk/vivi/main/seeroute" "/usr/local/bin/seeroute"
+
+# Update jembot
+update_file "https://raw.githubusercontent.com/edydevelopeler/eDYc1Nt4j3kiFoReEveRr/main/jembot.sh" "/usr/local/bin/jembot.sh"
+
+# Update profile
+update_file "https://raw.githubusercontent.com/helehsemvakwkwk/vivi/main/profile" "/usr/local/bin/profile"
+
+# Update backup
+update_file "https://raw.githubusercontent.com/helehsemvakwkwk/vivi/main/backup" "/usr/local/bin/backup"
+
+# Update restore
+update_file "https://raw.githubusercontent.com/helehsemvakwkwk/vivi/main/restore" "/usr/local/bin/restore"
+
+# Update ganti domain
+update_file "https://raw.githubusercontent.com/helehsemvakwkwk/vivi/main/gantidomain" "/usr/local/bin/gantidomain"
+
+# Update bwbot
+update_file "https://raw.githubusercontent.com/helehsemvakwkwk/vivi/main/bwbot" "/usr/local/bin/bwbot"
+
+# Update ngecrot
+update_file "https://raw.githubusercontent.com/helehsemvakwkwk/vivi/main/ngecrot" "/usr/local/bin/ngecrot"
+
+# Update limitIP
+update_file "https://raw.githubusercontent.com/helehsemvakwkwk/vivi/main/limit" "/usr/local/bin/limit"
+
+# Update Madngentot
+update_file "https://raw.githubusercontent.com/helehsemvakwkwk/vivi/main/madngentot" "/usr/local/bin/madngentot"
+
+# Update Subs template
+update_file "https://raw.githubusercontent.com/raffasyaa/semvak-subs/master/template-01/index.html" "/var/lib/marzban/templates/subscription/index.html"
+
+# Update HTML di /var/www/html
+update_file "https://raw.githubusercontent.com/raffasyaa/semvak-subs/main/propil.html" "/var/www/html/index.html"
+
+# Update Templet
+update_file "https://raw.githubusercontent.com/helehsemvakwkwk/vivi/main/main.py" "/usr/local/bin/main.py"
+
+# Update UsageBOT
+update_file "https://raw.githubusercontent.com/helehsemvakwkwk/vivi/main/usage.py" "/usr/local/bin/usage.py"
+
+# Update WarpMenu
+update_file "https://raw.githubusercontent.com/helehsemvakwkwk/vivi/main/warpmenu" "/usr/local/bin/warpmenu"
+
+# Update apdetcore
+update_file "https://raw.githubusercontent.com/helehsemvakwkwk/vivi/main/apdetcore" "/usr/local/bin/apdetcore"
+
+#install dependient template bot
+echo -e "${GREEN}Sabar loading hehe...${NC}"
+apt install -y pip >/dev/null 2>&1
+apt install sqlite3 >/dev/null 2>&1
+pip install requests==2.31.0 >/dev/null 2>&1
+pip install colorama >/dev/null 2>&1
+pip3 install python-telegram-bot==13.7 >/dev/null 2>&1
+
+# Tambahkan alias untuk updatesc ke profil shell
+if ! grep -q "alias updatesc='/usr/local/bin/updatesc'" ~/.bashrc; then
+    echo "alias updatesc='/usr/local/bin/updatesc'" >> ~/.bashrc
+    source ~/.bashrc
+fi
+
+# Deteksi dan ganti alias menu jika perlu
+if grep -q "alias menu='/usr/local/bin/profile'" ~/.bashrc; then
+    # Ganti alias lama dengan yang baru
+    sed -i "s|alias menu='/usr/local/bin/profile'|alias menu='/usr/local/bin/menu'|g" ~/.bashrc
+    source ~/.bashrc
+    echo -e "${CYAN}Alias menu telah diganti menjadi /usr/local/bin/menu.${NC}"
+fi
+
+# Hapus file /root/apdet tanpa menampilkan pesan kesalahan jika file tidak ditemukan
+rm /root/apdet 2>/dev/null
+
+clear
+echo -e "${GREEN}[NOTIF]${NC} Update Selesai Cok..."
+echo ""
+echo -e "Relogin untuk melihat ${GREEN}'efeknya'${NC} Cok..."
+sleep 2

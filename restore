@@ -1,0 +1,72 @@
+#!/bin/bash
+
+# Warna untuk output
+CYAN='\033[0;36m'
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+# Fungsi untuk mengunduh file
+download_file() {
+    local url="$1"
+    local dest_folder="$2"
+    mkdir -p "$dest_folder"
+    local filename=$(basename "$url")
+    local dest_path="$dest_folder/$filename"
+    curl -L -o "$dest_path" "$url"
+    echo "$dest_path"
+}
+
+# Fungsi untuk mengekstrak file ZIP
+extract_file() {
+    local zip_path="$1"
+    local extract_to="$2"
+    mkdir -p "$extract_to"
+    unzip -o "$zip_path" -d "$extract_to"
+}
+
+# Fungsi untuk mengganti file db.sqlite3
+replace_db() {
+    local extracted_folder="$1"
+    local db_path="$2"
+    local extracted_db_path="$extracted_folder/db.sqlite3"
+    if [ -f "$extracted_db_path" ]; then
+        mv "$extracted_db_path" "$db_path"
+    else
+        echo -e "${GREEN}File db.sqlite3 tidak ditemukan di dalam file zip.${NC}"
+        exit 1
+    fi
+}
+
+# Fungsi untuk merestart service Marzban
+restart_service() {
+    nohup marzban restart > /dev/null 2>&1 &
+}
+
+# Main
+main() {
+    read -p "$(echo -e ${CYAN}Masukkan url backup data :${NC}) " url
+    download_dir="/tmp/marzban_backup"
+    extract_dir="/tmp/marzban_extracted"
+    db_path="/var/lib/marzban/db.sqlite3"
+
+    echo -e "${GREEN}Mengunduh file...${NC}"
+    zip_path=$(download_file "$url" "$download_dir")
+    sleep 2
+
+    echo -e "${GREEN}Mengekstrak file...${NC}"
+    extract_file "$zip_path" "$extract_dir"
+    sleep 2
+
+    echo -e "${GREEN}Mengganti file db.sqlite3...${NC}"
+    replace_db "$extract_dir" "$db_path"
+    sleep 2
+
+    echo -e "${GREEN}Merestart service...${NC}"
+    restart_service
+    sleep 2
+
+    echo -e "${CYAN}Proses selesai.${NC}"
+}
+
+main
