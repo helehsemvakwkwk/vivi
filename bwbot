@@ -1,0 +1,165 @@
+#!/bin/bash
+
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+NC='\033[0m'  # No Color
+
+CONFIG_FILE="/etc/data/bot_config"
+CRONTAB_ENABLED_FILE="/etc/data/crontab_enabled"
+
+# Fungsi untuk mengambil informasi IP dari ipinfo.io
+get_ip_info() {
+    ipinfo_token="7b5dbaccc41db0"
+    response=$(curl -s "https://ipinfo.io/?token=$ipinfo_token")
+    isp=$(echo $response | jq -r '.org')
+    region=$(echo $response | jq -r '.timezone')
+    echo "$isp|$region"
+}
+
+# Memeriksa apakah file konfigurasi ada
+if [ ! -f "$CONFIG_FILE" ]; then
+    # File konfigurasi belum ada, meminta input dari pengguna
+    read -p "Masukkan Bot Token: " BOT_TOKEN
+    read -p "Masukkan Chat ID: " CHAT_ID
+    read -p "Masukkan Remarks: " REMARKS
+
+    # Menyimpan konfigurasi ke file
+    echo "BOT_TOKEN=\"$BOT_TOKEN\"" > "$CONFIG_FILE"
+    echo "CHAT_ID=\"$CHAT_ID\"" >> "$CONFIG_FILE"
+    echo "REMARKS=\"$REMARKS\"" >> "$CONFIG_FILE"
+
+    # Menanyakan apakah ingin mengaktifkan crontab untuk menjalankan skrip setiap pukul 00:00
+    read -p "$(echo -e "${CYAN}Aktifkan crontab tiap 00:00? (y/N): ${NC}")" enable_crontab
+
+    if [[ "$enable_crontab" =~ ^[Yy]$ ]]; then
+        (crontab -l 2>/dev/null; echo "0 0 * * * /usr/local/bin/bwbot") | crontab -
+        echo -e "${GREEN}Crontab berhasil diaktifkan untuk menjalankan skrip setiap pukul 00:00.${NC}"
+        touch "$CRONTAB_ENABLED_FILE"
+    else
+        echo -e "${CYAN}Crontab tidak diaktifkan.${NC}"
+    fi
+
+    # Menanyakan apakah ingin mengubah teks tombol dan URL
+    read -p "$(echo -e "Ubah teks tombol dan URL? ${CYAN}Default Y/N: ${NC}")" change_button
+
+    if [[ "$change_button" =~ ^[Yy]$ ]]; then
+        read -p "Masukkan teks tombol baru, $(echo -e "${CYAN}Ex: SKARTI${NC} : ")" button_text
+        read -p "Masukkan URL baru, $(echo -e "${CYAN}Ex: https://t.me/SaputraTech${NC} : ")" button_url
+        # Menyimpan konfigurasi tombol dan URL ke file
+        echo "button_text=\"$button_text\"" >> "$CONFIG_FILE"
+        echo "button_url=\"$button_url\"" >> "$CONFIG_FILE"
+    else
+        # Menyimpan default button_text dan button_url jika tidak diubah
+        echo "button_text=\"Cek Server\"" >> "$CONFIG_FILE"
+        echo "button_url=\"https://profile.saputratech.web.id\"" >> "$CONFIG_FILE"
+    fi
+else
+    # File konfigurasi sudah ada, membaca dari file
+    source "$CONFIG_FILE"
+fi
+
+# Mengambil informasi IP dari ipinfo.io
+ip_info=$(get_ip_info)
+IFS='|' read -r isp region <<< "$ip_info"
+
+# Mengambil data bandwidth dari perintah vnstat
+vnstat_output=$(vnstat -y 1 --style 0 | sed -n 6p | awk '{print "Download :", $2, $3 "\nUpload :", $5, $6 "\nTotal Usage :", $8, $9}')
+
+# Mengambil data uptime
+uptime_raw=$(uptime -p)
+
+# Mengambil hanya days dan hours dari uptime
+uptime_filtered=$(echo "$uptime_raw" | sed -e 's/.*up *//' -e 's/minutes/min/' -e 's/minute/min/' -e 's/hours/hrs/' -e 's/hour/hr/' -e 's/weeks/week/' -e 's/days/day/' | awk -F, '{print $1 "," $2}')
+
+# Menghapus koma jika tidak ada jam (hours) yang tampil
+uptime_final=$(echo "$uptime_filtered" | sed 's/,$//')
+
+# Menetapkan emoji tetap
+emoji="🐳"
+button_text_with_emoji="${emoji} ${button_text} ${emoji}"
+
+# URL dari mana file permission.txt akan diambil
+permission_url="https://raw.githubusercontent.com/helehsemvakwkwk/viavia/main/sholatbro.txt"
+
+# Fungsi untuk membaca expiry date dan client name dari URL permission.txt
+get_client_info() {
+    ip="$1"
+    permission_file=$(curl -s "$permission_url")
+    line=$(echo "$permission_file" | grep "$ip")
+    if [ -z "$line" ]; then
+        echo "No information found for IP: $ip"
+        return
+    fi
+
+    clientname=$(echo "$line" | awk '{print $2}')
+    expiry_date=$(echo "$line" | awk '{print $4}')
+    current_date=$(date +%Y-%m-%d)
+    days_remaining=$(( ( $(date -d "$expiry_date" +%s) - $(date -d "$current_date" +%s) ) / 86400 ))
+
+    echo "$clientname|$days_remaining|$expiry_date"
+}
+
+# IP dari konfigurasi (bisa diambil dari fungsi lain)
+my_ip=$(curl -s https://ipinfo.io/ip)
+
+# Mendapatkan informasi client
+client_info=$(get_client_info "$my_ip")
+IFS='|' read -r clientname days_remaining expiry_date <<< "$client_info"
+
+# Jika tidak ada informasi yang ditemukan, tampilkan pesan berbeda
+if [ -z "$clientname" ]; then
+    exp_message="Client: Not found"
+else
+    exp_message="🗓 Client Name: <code>$clientname</code>\n🗓 Expiry Date : <code>$days_remaining days remaining</code>"
+fi
+
+# Mengirim pesan ke bot Telegram dengan tombol di bawah teks
+send_telegram_message_with_button() {
+    current_time=$(date +"%d-%m-%Y %I:%M %p")
+
+    # Memformat teks untuk menjadi monospace
+    monospace_message=$(cat <<EOF
+━━━━━━━━━━━━━━━━━━━━━━━
+     🌙 DATA TRAFFIC SERVER 🌙
+━━━━━━━━━━━━━━━━━━━━━━━
+🌐 ISP : <code>$isp</code>
+⚡️ Remarks : <code>$REMARKS</code>
+🚀 Status : <code>Active</code>
+⏱ Uptime : <code>$uptime_final</code>
+🌍 Reg : <code>$region</code>
+➖➖➖➖➖➖➖➖➖➖➖➖
+📥 <code>$(echo "$vnstat_output" | sed -n 1p)</code>
+📤 <code>$(echo "$vnstat_output" | sed -n 2p)</code>
+💼 <code>$(echo "$vnstat_output" | sed -n 3p)</code>
+➖➖➖➖➖➖➖➖➖➖➖➖
+<pre>🗓 Client Name: <code>$clientname</code>
+🗓 Exp : <code>$days_remaining days remaining</code></pre>
+━━━━━━━━━━━━━━━━━━━━━━━
+  ⚠️ Automatic Midnight Update ⚠️
+━━━━━━━━━━━━━━━━━━━━━━━
+Last Update : ${current_time}
+━━━━━━━━━━━━━━━━━━━━━━━
+🤖 Bot Version 0.69.3
+EOF
+)
+
+    # Membuat keyboard inline dengan satu tombol
+    keyboard=$(jq -n --arg text "$button_text_with_emoji" --arg url "$button_url" \
+    '{inline_keyboard: [[{text: $text, url: $url}]]}')
+
+    data=$(jq -n --arg chat_id "$CHAT_ID" --arg text "$monospace_message" --argjson reply_markup "$keyboard" \
+    '{chat_id: $chat_id, text: $text, parse_mode: "HTML", reply_markup: $reply_markup}')
+
+    url="https://api.telegram.org/bot$BOT_TOKEN/sendMessage"
+    curl -s -X POST "$url" -H "Content-Type: application/json" -d "$data" > /dev/null
+}
+
+# Jika file crontab sudah ada, langsung eksekusi script tanpa menanyakan pertanyaan
+if [ -f "$CRONTAB_ENABLED_FILE" ]; then
+    send_telegram_message_with_button
+    echo -e "${GREEN}Pesan berhasil dikirim ke Telegram.${NC}"
+    echo -e "${GREEN}Jika tidak terkirim, jalankan ulang fitur ini, selanjutnya akan otomatis crontab jika diakfifkan${NC}"
+else
+    # Jika file crontab belum ada, tanyakan untuk konfigurasi
+    echo -e "${CYAN}Silakan konfigurasikan crontab.${NC}"
+fi

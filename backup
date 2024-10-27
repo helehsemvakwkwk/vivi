@@ -1,0 +1,112 @@
+#!/bin/bash
+
+# Path ke file konfigurasi
+config_file="/root/backup_config.conf"
+
+# ANSI escape code for cyan text
+CYAN='\033[0;36m'
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m' # No Color
+
+# Fungsi untuk meminta input dari pengguna
+get_input() {
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    read -p "$(echo -e "${CYAN}➽ Masukkan API Key bot Telegram Kamu: ${NC}")" bot_api
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    read -p "$(echo -e "${CYAN}➽ Masukkan Chat ID Telegram Kamu: ${NC}")" chat_id
+
+    # Simpan nilai-nilai ini ke dalam file konfigurasi
+    if echo "BOT_API=$bot_api" > "$config_file" && echo "CHAT_ID=$chat_id" >> "$config_file"; then
+        echo -e "${GREEN}Konfigurasi berhasil disimpan.${NC}"
+    else
+        echo -e "${RED}Gagal menyimpan konfigurasi. Periksa hak akses.${NC}"
+        exit 1
+    fi
+
+    # Tanyakan apakah ingin mengaktifkan crontab setiap 10 menit sekali !
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    read -p "$(echo -e "${CYAN}Aktifkan crontab setiap 10 menit sekali? (y/N): ${NC}")" enable_crontab
+
+    if [[ "$enable_crontab" =~ ^[yY]$ ]]; then
+        (crontab -l 2>/dev/null; echo "*/10 * * * * /usr/local/bin/backup") | crontab -
+        echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${GREEN}❖ Crontab telah diaktifkan ✅.${NC}"
+        echo -e "${CYAN}❖ BOT akan mengirim file backup setiap 10 menit sekali ⌚.${NC}"
+        echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    else
+        echo -e "${CYAN}Crontab tidak diaktifkan.${NC}"
+    fi
+}
+
+# Cek apakah file konfigurasi sudah ada
+if [ ! -f "$config_file" ]; then
+    get_input
+fi
+
+# Baca nilai-nilai dari file konfigurasi
+source "$config_file"
+
+# Path ke direktori yang berisi file
+directory="/var/lib/marzban/"
+
+# Hapus file access.log dan error.log jika ada
+rm -f "${directory}access.log" "${directory}error.log" > /dev/null 2>&1
+
+# Path ke file db.sqlite3
+db_file="${directory}db.sqlite3"
+
+# Path untuk menyimpan file backup
+backup_dir="/root/"
+
+# Menyimpan informasi alamat IP publik
+IP_ADDRESS=$(curl -s ifconfig.me)
+
+# Nama file backup
+backup_file="${IP_ADDRESS}-backupdata.zip"
+
+# Membersihkan backup sebelumnya, jika ada
+rm -f "${backup_dir}${backup_file}" > /dev/null 2>&1
+
+# Membuat backup dari file db.sqlite3
+zip -j "${backup_dir}${backup_file}" "$db_file" > /dev/null 2>&1
+
+# Menyimpan informasi waktu backup (hanya tanggal dan waktu)
+BACKUP_DATE=$(date +"%Y-%m-%d %I:%M:%S %p")
+
+# Menyimpan informasi nama client (Hostname dari VPS)
+CLIENT_NAME=$(hostname)
+
+# Membaca keterangan domain dari file /etc/data/domain
+if [ -f /etc/data/domain ]; then
+    DOMAIN=$(cat /etc/data/domain)
+else
+    DOMAIN="Domain tidak ditemukan"
+fi
+
+# Mengirim file backup ke bot Telegram
+response=$(curl -s -F chat_id="$CHAT_ID" \
+     -F caption=$'=================================\n『 Successfully backup your Database 』\n=================================\n◈ Client  : <code>'"$CLIENT_NAME</code>"$'\n◈ IP VPS  : <code>'"$IP_ADDRESS</code>"$'\n◈ Version  : 2.1 Stable\n◈ Built By  : @SaputraTech\n=================================\n➣ How To Restore ?\n➣ Use SFTP\n➣ Replace file db.sqlite3\n=================================' \
+     -F parse_mode="HTML" \
+     -F document=@"${backup_dir}${backup_file}" \
+     https://api.telegram.org/bot$BOT_API/sendDocument)
+
+# Mengecek apakah pengiriman berhasil
+if [[ $response == *'"ok":true'* ]]; then
+    echo -e "${CYAN}
+██████╗░░█████╗░███╗░░██╗███████╗
+██╔══██╗██╔══██╗████╗░██║██╔════╝
+██║░░██║██║░░██║██╔██╗██║█████╗░░
+██║░░██║██║░░██║██║╚████║██╔══╝░░
+██████╔╝╚█████╔╝██║░╚███║███████╗
+╚═════╝░░╚════╝░╚═╝░░╚══╝╚══════╝${NC}"
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${GREEN}➣ Berhasil Mengirim File Backup ke BOT Telegram Kamu ✅${NC}"
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+else
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${RED}➣ Gagal mengirim File Backup ke BOT Telegram ⛔${NC}"
+    echo -e "${RED}➣ Nampaknya ada kesalahan, Periksa API Key dan Chat ID ❗${NC}"
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+fi

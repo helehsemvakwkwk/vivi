@@ -1,0 +1,56 @@
+#!/bin/bash
+# Define colors
+YELLOW='\033[1;33m'
+RED='\033[1;31m'
+GREEN='\033[1;32m'
+BLUE='\033[1;34m'
+WHITE='\033[1;37m'
+NC='\033[0m' # No Color
+
+# Function untuk menampilkan menu
+show_menu() {
+    clear
+    echo -e "${YELLOW}###########################################${NC}"
+    echo -e "${YELLOW}#####${RED}       WARP Manager VPS v6.9     ${YELLOW}#####${NC}"
+    echo -e "${YELLOW}#####${GREEN}       SKT x AWN Project     ${YELLOW}#####${NC}"
+    echo -e "${YELLOW}###########################################${NC}"
+    echo -e "\n${WHITE}Kalo WARP Error ${GREEN}Bisa pakai ini"
+    echo -e "Bikin ribet aja ${GREEN}ngentot.\n"
+    echo -e "${RED}Pilih opsi dibawah :${NC}"
+    echo "1. Uninstall Warp"
+    echo "2. Install Warp"
+    echo "3. Change Warp Account Type ( Free, Plus..)"
+    echo "4. Exit"
+}
+
+# Function untuk menangani pilihan user
+read_choice() {
+    read -p "Enter your choice [1-4]: " choice
+    case $choice in
+        1)
+            echo "Uninstalling Warp..."
+            warp u
+            ;;
+        2)
+            echo "Installing Warp..."
+            bash <(curl -sSL https://raw.githubusercontent.com/hamid-gh98/x-ui-scripts/main/install_warp_proxy.sh)
+            ;;
+        3)
+            echo "Changing Warp Keys..."
+            warp a
+            ;;
+        4)
+            echo "Exiting..."
+            exit 0
+            ;;
+        *)
+            echo "Invalid choice, please select a number between 1 and 4."
+            ;;
+    esac
+}
+
+# Loop untuk menampilkan menu dan membaca pilihan
+while true; do
+    show_menu
+    read_choice
+done
